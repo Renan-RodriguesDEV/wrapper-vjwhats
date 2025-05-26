@@ -1,6 +1,25 @@
-# vjwhats/whatsapp.py
+"""
+whatsapp.py
+Este módulo fornece a classe WhatsApp para automatizar interações com o WhatsApp Web utilizando Selenium WebDriver.
+Funcionalidades principais:
+- Inicialização e autenticação automática no WhatsApp Web.
+- Envio de mensagens de texto para contatos ou grupos.
+- Envio de arquivos (documentos, imagens, vídeos) via chat.
+- Download de imagens enviadas no chat no dia atual.
+- Busca e seleção de contatos por nome ou número.
+- Limpeza de mensagens de um contato específico.
+- Manipulação de alertas e elementos da interface do WhatsApp Web.
+A classe WhatsApp encapsula métodos robustos para manipulação da interface web, tornando possível a automação de tarefas rotineiras no WhatsApp para integrações, bots ou sistemas de atendimento automatizado.
+Requisitos:
+- selenium
+- Um driver compatível com o navegador (ex: chromedriver)
+
+"""
+
+# wrapper_vjwhats/whatsapp.py
 
 import os
+import random
 import logging
 from time import sleep
 from pathlib import Path
@@ -144,6 +163,7 @@ class WhatsApp:
             attachment (Path): Path to the file to send.
             which (int): Type of file (1 for document, 2 for image/video).
         """
+        print(f"Sending file: {attachment}")
         try:
             filename = os.path.realpath(attachment)
             self.find_attachment()
@@ -189,10 +209,11 @@ class WhatsApp:
             )
         )
 
-    def get_images_sent(self):
+    def get_images_sent(self, ultima_imagem: int = 1):
         """
         Retrieve and download images sent today in the current chat.
         """
+        n_images = 0
         try:
             dadosButton = self.wait.until(
                 EC.presence_of_element_located(
@@ -203,7 +224,7 @@ class WhatsApp:
 
             dadosButton = self.wait.until(
                 EC.presence_of_element_located(
-                    (By.XPATH, "//span[text()='Mídia, links e docs']")
+                    (By.XPATH, "//div[text()='Mídia, links e docs']")
                 )
             )
             dadosButton.click()
@@ -212,13 +233,15 @@ class WhatsApp:
                 EC.presence_of_element_located((By.XPATH, "//div[text()='Neste mês']"))
             )
 
+            # Pega a primeira imagem da lista usando o xpath fornecido
             firstImg = self.wait.until(
                 EC.presence_of_element_located(
-                    (By.XPATH, "(//div[contains(@aria-label,' Imagem')])[1]")
+                    (By.XPATH, "(//div[@aria-label=' Imagem'])[1]")
                 )
             )
+            sleep(20)  # Aguarda o carregamento da imagem
             firstImg.click()
-            sleep(5)
+            sleep(random.randint(5, 8))
 
             while True:
                 element_imagens = "(//div[contains(@aria-label, 'Lista de mídias')]/div[@role='listitem'])"
@@ -250,22 +273,27 @@ class WhatsApp:
                         )
                     )
                     print(
-                        'Texto "Hoje às" encontrado na Imagem Principal, continuando...'
+                        'Texto "Hoje às" encontrado na Imagem Principal, continuando...',
+                        end="\r",
                     )
 
                 except:
                     print(
-                        'Texto "Hoje às" não encontrado na Imagem Principal, saindo do loop...'
+                        'Texto "Hoje às" não encontrado na Imagem Principal, saindo do loop...',
+                        end="\r",
                     )
                     break
 
-            sleep(5)
+            sleep(random.randint(5, 8))
             images = self.wait.until(
                 EC.presence_of_all_elements_located((By.XPATH, element_imagens))
             )
             total_images = len(images)
+            # Limita o número de imagens a serem baixadas
+            if ultima_imagem != 1:
+                ultima_imagem = total_images - ultima_imagem
 
-            for i in range(total_images, 1, -1):
+            for i in range(total_images, ultima_imagem, -1):
                 try:
                     imgButton = self.wait_img.until(
                         EC.presence_of_element_located(
@@ -280,16 +308,21 @@ class WhatsApp:
                                 (By.XPATH, "//div[contains(text(), 'Hoje às')]")
                             )
                         )
-                        print(f'Texto "Hoje às" encontrado na imagem {i}')
+                        print(f'Texto "Hoje às" encontrado na imagem {i}', end="\r")
 
                         downloadButton = self.wait.until(
                             EC.presence_of_element_located(
-                                (By.XPATH, f"//div[contains(@aria-label, 'Baixar')]")
+                                (By.XPATH, f"//button[@aria-label='Baixar']")
                             )
                         )
 
                         downloadButton.click()
-                        sleep(1)
+                        print(
+                            f"Download concluído, imagens já baixadas: {n_images}",
+                            end="\r",
+                        )
+                        n_images += 1
+                        sleep(0.5)
                     except TimeoutException:
                         print(f'Texto "Hoje às" não encontrado na imagem {i}')
                         break
@@ -309,8 +342,12 @@ class WhatsApp:
             # go back to the main screen
             for _ in range(2):
                 conversas.send_keys(Keys.ESCAPE)
+                print("Voltando para a tela principal", end="\r")
+                sleep(0.5)
         except Exception as e:
             LOGGER.exception(f"An exception occurred: {e}")
+        finally:
+            return n_images
 
     def clear_search_box(self):
         """
@@ -404,12 +441,16 @@ class WhatsApp:
             buttons[1].click()
         self.wait.until(
             EC.presence_of_element_located(
-                (By.XPATH, "//div[@aria-label='Limpar conversa']")
+                (By.XPATH, "//span[text()='Limpar conversa']")
             )
         ).click()
+        # timeout for loading the confirmation button
+        sleep(random.randint(2, 5))
         self.wait.until(
             EC.presence_of_element_located(
                 (By.XPATH, "//div[text()='Limpar conversa']")
             )
         ).click()
+        # timeout for loading the confirmation deletion of messages
+        sleep(random.randint(5, 10))
         LOGGER.info(f"All messages from {contact} have been cleared.")

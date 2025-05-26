@@ -1,1 +1,4 @@
 .env
+venv
+dist
+wrapper_vjwhats.egg-info
