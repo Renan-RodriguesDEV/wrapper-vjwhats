@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 setup(
     name="wrapper-vjwhats",
-    license_files=["LICENSE"],
+    license="MIT",
     version="0.0.3",
     author="little_renan",
     author_email="renanrodrigues7110@gmail.com",
