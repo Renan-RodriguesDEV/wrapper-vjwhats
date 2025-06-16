@@ -1,0 +1,4 @@
+clipboard==0.0.4
+selenium==4.33.0
+setuptools
+
