@@ -1,4 +1,6 @@
 .env
-venv
-dist
+venv/
+dist/
 wrapper_vjwhats.egg-info
+tests/
+*cache*/

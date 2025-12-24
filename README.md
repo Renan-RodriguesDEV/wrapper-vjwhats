@@ -1,88 +1,391 @@
-# WhatsApp Library
+# 📱 Wrapper VJWhats
+
+<div align="center">
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.6+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
+[![Selenium](https://img.shields.io/badge/Selenium-4.39+-orange.svg)](https://www.selenium.dev/)
+[![Version](https://img.shields.io/badge/version-0.0.6-brightgreen.svg)](https://github.com/Renan-RodriguesDEV/wrapper-vjwhats)
 
-A Python library that provides a convenient interface to interact with WhatsApp Web using Selenium.
-This library automates WhatsApp Web operations, enabling message sending, file sharing, and conversation management through Python code.
+**Uma biblioteca Python poderosa para automação do WhatsApp Web via Selenium**
 
-Developed by Renan, primarily used by VJ Bots for automation solutions.
+Desenvolvida por [Renan Rodrigues](https://github.com/Renan-RodriguesDEV)
+Utilizada principalmente pela VJ Bots para soluções de automação
 
-## Features
+[Instalação](#-instalação) • [Uso Rápido](#-uso-rápido) • [Documentação](#-documentação-da-api) • [Exemplos](#-exemplos-práticos)
 
-- 🔍 Find and open conversations by username or phone number
-- 💬 Send text messages programmatically
-- 📎 Share files, images, and documents
-- 📱 Start new conversations with unsaved contacts
-- 🔄 Automated session handling with Chrome profiles
+</div>
 
-## Installation
+---
 
-Install the WhatsApp library and its dependencies:
+## ✨ Funcionalidades
+
+- 🔍 **Buscar contatos** - Localizar e abrir conversas por nome de usuário ou número
+- 💬 **Enviar mensagens** - Envio programático de mensagens de texto
+- 📎 **Compartilhar arquivos** - Suporte a imagens, vídeos e documentos
+- 📥 **Baixar imagens** - Download automático de imagens enviadas no dia
+- 📱 **Iniciar conversas** - Abrir chat com números não salvos
+- 🗑️ **Limpar conversas** - Apagar todo histórico de mensagens de um contato
+- 🔄 **Sessão persistente** - Manter login usando perfis do Chrome
+- 📊 **Logging completo** - Sistema de logs detalhado para debugging
+
+## 📋 Requisitos
+
+- Python 3.13 ou superior
+- Google Chrome instalado
+- ChromeDriver compatível com sua versão do Chrome
+
+## 🚀 Instalação
+
+### Via Git (Desenvolvimento)
 
 ```bash
-# Install required dependencies
-pip install selenium
+# Clone o repositório
+git clone https://github.com/Renan-RodriguesDEV/wrapper-vjwhats.git
+cd wrapper-vjwhats
 
-# Clone the repository (or install via pip if published)
-git clone https://github.com/username/vjwhats.git
-cd vjwhats
+# Instale as dependências
+pip install -r requirements.txt
+
+# Ou instale em modo desenvolvimento
 pip install -e .
 ```
 
-## Usage Example
+### Via pip (Futuro)
 
-```python
-from vjwhats import WhatsApp
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from pathlib import Path
-
-def main():
-    # Set up Chrome with an existing user profile (to use saved WhatsApp Web session)
-    chrome_options = Options()
-    chrome_options.add_argument("user-data-dir=C:/Users/EXAMPLE/AppData/Local/Google/Chrome/User Data")
-    chrome_options.add_argument("profile-directory=Default")
-
-    # Initialize the Chrome WebDriver
-    driver = webdriver.Chrome(options=chrome_options)
-
-    # Create WhatsApp instance
-    wpp = WhatsApp(driver)
-
-    # Example 1: Send message to existing contact
-    wpp.find_by_username("Contact 1")
-    wpp.send_message("Hello, this is a test message!")
-
-    # Example 2: Send file to another contact
-    wpp.find_by_username("Contact 2")
-    wpp.send_file(Path("path/to/file"), which=1)  # 'which=1' refers to file selector type
-
-    # Example 3: Start conversation with new number and send a file
-    wpp.start_conversation("+55999977885")  # Format with country code
-    wpp.send_file(Path("path/to/file"), which=1)
-
-    # Close driver when finished
-    # driver.quit()
-
-if __name__ == "__main__":
-    main()
+```bash
+pip install wrapper-vjwhats
 ```
 
-## API Reference
+## 🎯 Uso Rápido
 
-### Core Functions
+```python
+from wrapper_vjwhats import WhatsApp
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
-- `__init__(driver)` - Initialize with Selenium WebDriver
-- `find_by_username(username)` - Open chat with specific contact
-- `send_message(message)` - Send text message to current chat
-- `send_file(file_path, which=1)` - Send file to current chat
-- `start_conversation(phone)` - Start new chat with phone number
+# Configurar Chrome com perfil existente (para manter sessão do WhatsApp)
+chrome_options = Options()
+chrome_options.add_argument("user-data-dir=C:/Users/SEU_USUARIO/AppData/Local/Google/Chrome/User Data")
+chrome_options.add_argument("profile-directory=Default")
 
-## Contributing
+# Inicializar WebDriver
+driver = webdriver.Chrome(options=chrome_options)
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+# Criar instância do WhatsApp
+wpp = WhatsApp(browser=driver, time_out=300)
 
-## License
+# Enviar mensagem
+wpp.find_by_username("João Silva")
+wpp.send_message("Olá! Esta é uma mensagem automática.")
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+# Enviar arquivo
+wpp.send_file("./documento.pdf", which=1)
+
+# Fechar quando terminar
+# driver.quit()
+```
+
+## 📚 Documentação da API
+
+### Classe `WhatsApp`
+
+#### Inicialização
+
+```python
+WhatsApp(browser: WebDriver = None, time_out: int = 300)
+```
+
+**Parâmetros:**
+
+- `browser`: Instância do Selenium WebDriver
+- `time_out`: Tempo limite em segundos para operações de espera (padrão: 300)
+
+---
+
+### 🔧 Métodos Principais
+
+#### `find_by_username(username: str) -> bool`
+
+Localiza e abre uma conversa com um contato específico.
+
+**Parâmetros:**
+
+- `username`: Nome do contato ou número de telefone
+
+**Retorna:** `True` se o contato foi encontrado, `False` caso contrário
+
+**Exemplo:**
+
+```python
+if wpp.find_by_username("Maria Santos"):
+    print("Conversa aberta com sucesso!")
+```
+
+---
+
+#### `send_message(message: str) -> str`
+
+Envia uma mensagem de texto para o chat atual.
+
+**Parâmetros:**
+
+- `message`: Texto da mensagem a ser enviada
+
+**Retorna:** Código de status:
+
+- `"1"`: Mensagem enviada com sucesso
+- `"3"`: Erro ao enviar
+- `"4"`: Contato não encontrado
+
+**Exemplo:**
+
+```python
+status = wpp.send_message("Olá, tudo bem?")
+if status == "1":
+    print("Mensagem enviada!")
+```
+
+---
+
+#### `send_file(attachment: str, which: int) -> int`
+
+Envia um arquivo no chat atual.
+
+**Parâmetros:**
+
+- `attachment`: Caminho do arquivo (string)
+- `which`: Tipo de arquivo
+  - `1`: Documento (PDF, TXT, DOCX, etc.)
+  - `2`: Imagem ou vídeo (JPG, PNG, MP4, etc.)
+
+**Retorna:**
+
+- `1`: Arquivo enviado com sucesso
+- `-1`: Erro ao enviar
+- `0`: Operação não concluída
+
+**Exemplo:**
+
+```python
+# Enviar documento
+wpp.send_file("./relatorio.pdf", which=1)
+
+# Enviar imagem
+wpp.send_file("./foto.jpg", which=2)
+```
+
+---
+
+#### `start_conversation(mobile: str) -> bool`
+
+Inicia uma nova conversa com um número de telefone (mesmo não salvo).
+
+**Parâmetros:**
+
+- `mobile`: Número completo com código do país (ex: `+5511999887766`)
+
+**Retorna:** `True` se a conversa foi iniciada, `False` caso contrário
+
+**Timeout:** 30 segundos
+
+**Exemplo:**
+
+```python
+if wpp.start_conversation("+5511999887766"):
+    wpp.send_message("Olá, esta é uma mensagem automática!")
+```
+
+---
+
+#### `get_images_sent(limit_images: int = 0) -> int`
+
+Baixa imagens enviadas hoje no chat atual.
+
+**Parâmetros:**
+
+- `limit_images`: Número máximo de imagens para baixar (0 = sem limite)
+
+**Retorna:** Número de imagens baixadas
+
+**Exemplo:**
+
+```python
+# Baixar até 10 imagens
+num_images = wpp.get_images_sent(limit_images=10)
+print(f"{num_images} imagens baixadas")
+```
+
+---
+
+#### `clear_messages(contact: str)`
+
+Limpa todo o histórico de mensagens de um contato.
+
+**Parâmetros:**
+
+- `contact`: Nome do contato
+
+**Exemplo:**
+
+```python
+wpp.clear_messages("Grupo Teste")
+```
+
+---
+
+#### `clear_search_box()`
+
+Limpa o campo de busca de contatos.
+
+**Exemplo:**
+
+```python
+wpp.clear_search_box()
+```
+
+---
+
+## 💡 Exemplos Práticos
+
+### Envio em Massa
+
+```python
+contatos = ["João", "Maria", "Pedro"]
+mensagem = "Feliz Natal! 🎄"
+
+for contato in contatos:
+    if wpp.find_by_username(contato):
+        wpp.send_message(mensagem)
+        print(f"Mensagem enviada para {contato}")
+```
+
+### Enviar Documento com Verificação
+
+```python
+arquivo = "./relatorio_mensal.pdf"
+
+if arquivo.exists():
+    wpp.find_by_username("Gerente")
+    resultado = wpp.send_file(arquivo, which=1)
+
+    if resultado == 1:
+        print("Relatório enviado com sucesso!")
+    else:
+        print("Erro ao enviar relatório")
+```
+
+### Backup de Imagens
+
+```python
+# Abrir conversa e baixar todas as imagens de hoje
+wpp.find_by_username("Trabalho - Fotos")
+total = wpp.get_images_sent()
+print(f"Backup concluído: {total} imagens salvas")
+```
+
+### Limpar Conversas Antigas
+
+```python
+conversas_antigas = ["Grupo Temporário", "Chat Teste"]
+
+for conversa in conversas_antigas:
+    wpp.clear_messages(conversa)
+    print(f"Conversa '{conversa}' limpa")
+```
+
+## 🔒 Melhores Práticas
+
+### 1. Manter Sessão Ativa
+
+```python
+# Use sempre um perfil do Chrome para evitar escanear QR code a cada execução
+chrome_options = Options()
+chrome_options.add_argument("user-data-dir=C:/Users/SEU_USUARIO/AppData/Local/Google/Chrome/User Data")
+chrome_options.add_argument("profile-directory=Default")
+```
+
+### 2. Tratamento de Erros
+
+```python
+try:
+    wpp.find_by_username("Contato")
+    wpp.send_message("Mensagem")
+except Exception as e:
+    print(f"Erro: {e}")
+```
+
+### 3. Aguardar Carregamento
+
+```python
+import time
+
+# Dê tempo para o WhatsApp Web carregar completamente antes de interagir
+time.sleep(5)
+```
+
+### 4. Fechar Adequadamente
+
+```python
+# Sempre feche o driver ao finalizar
+try:
+    # ... suas operações ...
+finally:
+    driver.quit()
+```
+
+## 📝 Logs
+
+A biblioteca gera logs automáticos em `logs/whatsapp_[PID]_[DATA].log` com informações detalhadas sobre todas as operações.
+
+Exemplo de log:
+
+```
+2025-12-24 10:30:15 - whatsapp -- [INFO] >> Successfully fetched chat "João Silva"
+2025-12-24 10:30:17 - whatsapp -- [INFO] >> 1
+2025-12-24 10:30:20 - whatsapp -- [INFO] >> Attachment has been successfully sent to João Silva
+```
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Siga estes passos:
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/MinhaFeature`)
+3. Commit suas mudanças (`git commit -m 'Adiciona MinhaFeature'`)
+4. Push para a branch (`git push origin feature/MinhaFeature`)
+5. Abra um Pull Request
+
+## ⚠️ Avisos Importantes
+
+- Esta biblioteca interage com o WhatsApp Web, que pode ter seus seletores alterados pelo WhatsApp a qualquer momento
+- O uso de automação pode violar os Termos de Serviço do WhatsApp
+- Use com responsabilidade e em conformidade com as políticas do WhatsApp
+- Recomendado para uso pessoal e educacional
+
+## 📄 Licença
+
+Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+## 👨‍💻 Autor
+
+**Renan Rodrigues**
+
+- GitHub: [@Renan-RodriguesDEV](https://github.com/Renan-RodriguesDEV)
+- Email: renanrodrigues7110@gmail.com
+
+## 🔗 Links Úteis
+
+- [Documentação do Selenium](https://www.selenium.dev/documentation/)
+- [WhatsApp Web](https://web.whatsapp.com/)
+- [Repositório do Projeto](https://github.com/Renan-RodriguesDEV/wrapper-vjwhats)
+
+---
+
+<div align="center">
+
+**Se este projeto foi útil para você, considere dar uma ⭐ no repositório!**
+
+Desenvolvido com ❤️ por Renan Rodrigues
+
+</div>

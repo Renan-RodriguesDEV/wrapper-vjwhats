@@ -1,64 +1,56 @@
 """
-whatsapp.py
-Este módulo fornece a classe WhatsApp para automatizar interações com o WhatsApp Web utilizando Selenium WebDriver.
-Funcionalidades principais:
-- Inicialização e autenticação automática no WhatsApp Web.
-- Envio de mensagens de texto para contatos ou grupos.
-- Envio de arquivos (documentos, imagens, vídeos) via chat.
-- Download de imagens enviadas no chat no dia atual.
-- Busca e seleção de contatos por nome ou número.
-- Limpeza de mensagens de um contato específico.
-- Manipulação de alertas e elementos da interface do WhatsApp Web.
-A classe WhatsApp encapsula métodos robustos para manipulação da interface web, tornando possível a automação de tarefas rotineiras no WhatsApp para integrações, bots ou sistemas de atendimento automatizado.
-Requisitos:
-- selenium
-- Um driver compatível com o navegador (ex: chromedriver)
+Este módulo utiliza Selenium para interagir com o WhatsApp Web.
 
+Última atualização: 24 de dezembro de 2025
+
+Criado por: Renan Rodrigues (https://github.com/Renan-RodriguesDEV)
 """
 
-# wrapper_vjwhats/whatsapp.py
-
+import datetime
+import logging
 import os
 import random
-import logging
-import clipboard
 from time import sleep
-from pathlib import Path
-from selenium.webdriver.support.ui import WebDriverWait
+
+import pyperclip
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.webdriver import WebDriver
+from selenium.webdriver.support.ui import WebDriverWait
 
-LOGGER = logging.getLogger()
+from .elements import Elements
+
+LOGGER = logging.getLogger("whatsapp")
 
 
 class WhatsApp:
     """
-    A class to interact with WhatsApp Web using Selenium.
+    Classe responsável por interagir com o WhatsApp Web via Selenium.
 
-    Attributes:
-        BASE_URL (str): The base URL for WhatsApp Web.
-        browser: The Selenium WebDriver instance.
-        wait: WebDriverWait instance with a timeout.
-        wait_img: WebDriverWait instance with a shorter timeout for image operations.
-        mobile (str): The mobile number currently being interacted with.
+    Atributos:
+        BASE_URL (str): URL base do WhatsApp Web.
+        browser: Instância do Selenium WebDriver ativa.
+        wait: Objeto WebDriverWait com tempo limite padrão.
+        wait_img: WebDriverWait com tempo reduzido para operações com imagens.
+        mobile (str): Número de telefone atualmente em uso.
     """
 
-    def __init__(self, browser: WebDriver = None, time_out=600):
+    def __init__(self, browser: WebDriver = None, time_out=300):
         """
-        Initialize the WhatsApp instance.
+        Inicializa a instância do WhatsApp.
 
         Args:
-            browser: The Selenium WebDriver instance.
-            time_out (int): Timeout for WebDriverWait, in seconds.
+            browser: Instância do Selenium WebDriver.
+            time_out (int): Tempo limite em segundos utilizado pelo WebDriverWait.
         """
         self.BASE_URL = "https://web.whatsapp.com/"
         self.browser = browser
+        # self.browser.implicitly_wait(30)
         self.wait = WebDriverWait(self.browser, time_out)
-        self.wait_img = WebDriverWait(self.browser, 5)
+        self.wait_img = WebDriverWait(self.browser, 10)
         self.wait_contact = WebDriverWait(self.browser, 30)
         self.cli()
         self.login()
@@ -66,7 +58,7 @@ class WhatsApp:
 
     def cli(self):
         """
-        Configure the logger for command line interface.
+        Configura o logger para uso em linha de comando.
         """
         handler = logging.StreamHandler()
         handler.setFormatter(
@@ -75,159 +67,178 @@ class WhatsApp:
             )
         )
         LOGGER.addHandler(handler)
-        LOGGER.setLevel(logging.INFO)
+        LOGGER.setLevel(logging.DEBUG)
+        if not os.path.exists("logs"):
+            os.makedirs("logs")
+        file_handler = logging.FileHandler(
+            f"logs/whatsapp_{os.getpid()}_{datetime.datetime.today().strftime('%d_%m_%Y')}.log"
+        )
+        file_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s - %(name)s -- [%(levelname)s] >> %(message)s"
+            )
+        )
+        LOGGER.addHandler(file_handler)
 
     def login(self):
         """
-        Open WhatsApp Web and maximize the browser window.
+        Abre o WhatsApp Web e maximiza a janela do navegador.
         """
         self.browser.get(self.BASE_URL)
         self.browser.maximize_window()
 
     def catch_alert(self, seconds=3):
         """
-        Handle alert dialogs.
+        Trata diálogos de alerta.
 
         Args:
-            seconds (int): Time to wait for an alert to appear, in seconds.
+            seconds (int): Tempo em segundos para aguardar o aparecimento do alerta.
 
         Returns:
-            bool: True if an alert was present, False otherwise.
+            bool: True se um alerta estiver presente, False caso contrário.
         """
         try:
             WebDriverWait(self.browser, seconds).until(EC.alert_is_present())
-            alert = self.browser.switch_to.alert.accept()
+            self.browser.switch_to.alert.accept()
             return True
         except Exception as e:
-            LOGGER.exception(f"An exception occurred: {e}")
+            LOGGER.error(f"An exception occurred: {e}")
             return False
 
     def send_message(self, message: str) -> str:
         """
-        Send a message to the current chat.
+        Envia uma mensagem para o chat atual.
 
         Args:
-            message (str): The message to send.
+            message (str): Texto que será enviado.
 
         Returns:
-            str: Status code indicating the result of the operation. e.g. "1" for success, "2" for failure. "3" for exception, "4" for alert confirmation.
+            str: Código de status indicando o resultado da operação.
         """
         try:
-            inp_xpath = "//div[@aria-placeholder='Digite uma mensagem']"
+            inp_xpath = Elements.INPUT_MESSAGE  # UPDT 08-08
             nr_not_found_xpath = (
-                '//*[@id="app"]/div/span[2]/div/span/div/div/div/div/div/div[2]/div/div'
+                Elements.NR_NOT_FOUND  # UPDT 08-08
             )
             ctrl_element = self.wait.until(
                 lambda ctrl_self: ctrl_self.find_elements(By.XPATH, nr_not_found_xpath)
                 or ctrl_self.find_elements(By.XPATH, inp_xpath)
             )
-
             for i in ctrl_element:
                 if i.aria_role == "textbox":
-                    # Copia a mensagem para o clipboard
-                    clipboard.copy(message)
-                    # Garante que o campo está focado
-                    i.click()
-                    # Cria uma instância de ActionChains para simular ações do teclado
-                    actions = ActionChains(self.browser)
-                    # Simula o pressionamento de Ctrl+V para colar a mensagem
-                    actions.key_down(Keys.CONTROL).send_keys("v").key_up(
-                        Keys.CONTROL
-                    ).perform()
+                    pyperclip.copy(message)
+                    ActionChains(self.browser).key_down(Keys.CONTROL).send_keys(
+                        "v"
+                    ).key_up(Keys.CONTROL).perform()
+
                     sleep(1)
-                    # Envia a mensagem pressionando Enter
                     i.send_keys(Keys.ENTER)
                     msg = "1"
                     sleep(2.5)
                     try:
                         self.catch_alert()
-                    except:
+                    except Exception:
                         pass
                 elif i.aria_role == "button":
                     if i.text == "OK":
                         i.send_keys(Keys.ENTER)
                         msg = "4"
         except (NoSuchElementException, Exception) as bug:
-            LOGGER.exception(f"An exception occurred: {bug}")
+            LOGGER.error(f"An exception occurred: {bug}")
             msg = "3"
         finally:
-            LOGGER.info(f"Statud sendly: {msg}")
+            LOGGER.info(f"{msg}")
             return msg
 
     def find_attachment(self):
         """
-        Click the attachment button in the chat.
+        Clica no botão de anexar arquivos do chat.
         """
         clipButton = self.wait.until(
-            EC.presence_of_element_located((By.XPATH, '//*[@title="Anexar"]'))
+            EC.presence_of_element_located(
+                (By.XPATH, Elements.ATTACHMENT_BUTTON)
+            )  # novo XPath UPDT 19-09-2025
         )
         clipButton.click()
 
-    def send_file(self, attachment: Path, which: int):
+    def send_file(self, attachment: str, which: int):
         """
-        Send a file in the chat.
+        Envia um arquivo pelo chat.
 
         Args:
-            attachment (Path): Path to the file to send.
-            which (int): Type of file (1 for document, 2 for image/video).
+            attachment (str): Caminho do arquivo a ser enviado.
+            which (int): Tipo do arquivo (1 documento, 2 imagem/vídeo).
         """
+        response = 0
         LOGGER.info(f"Sending file: {attachment}")
         try:
-            filename = os.path.realpath(attachment)
+            filename = os.path.abspath(attachment)
             self.find_attachment()
 
             if which == 1:
-                xpath = "//input[@accept='*']"
+                LOGGER.info("Sending a document...")
+                xpath = Elements.ALL_INPUT_FILE
+                try:
+                    WebDriverWait(self.browser, 5000).until(
+                        EC.element_to_be_clickable((By.XPATH, Elements.DOCUMENT_BUTTON))
+                    ).click()
+                    LOGGER.info("Clicked on Documento button.")
+                except Exception as e:
+                    LOGGER.error(f"Error clicking on Documento: {e}")
             elif which == 2:
-                xpath = (
-                    "//input[@accept='image/*,video/mp4,video/3gpp,video/quicktime']"
-                )
+                LOGGER.info("Sending an image or video...")
+                xpath = Elements.IMAGE_INPUT_FILE
+                try:
+                    WebDriverWait(self.browser, 5000).until(
+                        EC.element_to_be_clickable((By.XPATH, Elements.IMAGE_BUTTON))
+                    ).click()
+                    LOGGER.info("Clicked on Documento button.")
+                except Exception as e:
+                    LOGGER.error(f"Error clicking on Documento: {e}")
 
             sendButton = self.wait.until(
                 EC.presence_of_element_located((By.XPATH, xpath))
             )
             sendButton.send_keys(filename)
-
             sleep(2)
             self.send_attachment()
             sleep(5)
+            response = 1
             LOGGER.info(f"Attachment has been successfully sent to {self.mobile}")
         except (NoSuchElementException, Exception) as bug:
-            LOGGER.exception(f"Failed to send a message to {self.mobile} - {bug}")
+            response = -1
+            LOGGER.error(f"Failed to send a message to {self.mobile} - {bug}")
         finally:
             LOGGER.info("send_file() finished running!")
+            return response
 
     def send_attachment(self):
         """
-        Click the send button to send the attachment.
+        Aciona o botão de envio para concluir o anexo.
         """
         self.wait.until_not(
-            EC.presence_of_element_located(
-                (By.XPATH, '//*[@id="main"]//*[@data-icon="msg-time"]')
-            )
+            EC.presence_of_element_located((By.XPATH, Elements.SENDING_MESSAGE_CLOCK))
         )
         sendButton = self.wait.until(
-            EC.presence_of_element_located((By.XPATH, "//div[@aria-label='Enviar']"))
+            EC.presence_of_element_located((By.XPATH, Elements.SEND_BUTTON))
         )
+        # TODO:Descomentar se quiser fechar a pré-visualização antes de enviar, apenas para testes sem envios
+        # ActionChains(self.browser).send_keys(Keys.ESCAPE).perform()
         sendButton.click()
         sleep(2)
         self.wait.until_not(
-            EC.presence_of_element_located(
-                (By.XPATH, '//*[@id="main"]//*[@data-icon="msg-time"]')
-            )
+            EC.presence_of_element_located((By.XPATH, Elements.SENDING_MESSAGE_CLOCK))
         )
 
-    def get_images_sent(self, ultima_imagem: int = 1):
+    def get_images_sent(self, limit_images: int = 0):
         """
-        Retrieve and download images sent today in the current chat.
+        Recupera e baixa as imagens enviadas hoje no chat atual.
         """
         n_images = 0
         try:
             # Seleciona e clica em "Dados do perfil" para acessar as mídias
             dadosButton = self.wait.until(
-                EC.presence_of_element_located(
-                    (By.XPATH, "//div[@title='Dados do perfil']")
-                )
+                EC.presence_of_element_located((By.XPATH, Elements.DATA_PROFILE_BUTTON))
             )
             dadosButton.click()
             LOGGER.info(
@@ -235,9 +246,7 @@ class WhatsApp:
             )
             # Aguarda o carregamento do botão de mídia, links e documentos. E clica nele
             dadosButton = self.wait.until(
-                EC.presence_of_element_located(
-                    (By.XPATH, "//div[text()='Mídia, links e docs']")
-                )
+                EC.presence_of_element_located((By.XPATH, Elements.MEDIA_DOCS))
             )
             dadosButton.click()
             LOGGER.info(
@@ -246,144 +255,109 @@ class WhatsApp:
 
             # Aguarda o carregamento da lista de mídias carregadas com "Neste mês"
             self.wait.until(
-                EC.presence_of_element_located((By.XPATH, "//div[text()='Neste mês']"))
+                EC.presence_of_element_located((By.XPATH, Elements.THIS_MONTH))
             )
             LOGGER.info("Media list loaded, waiting for the first image to appear...")
 
-            # Pega a primeira imagem da lista usando o xpath fornecido
-            firstImg = self.wait.until(
-                EC.presence_of_element_located(
-                    (By.XPATH, "(//div[@aria-label=' Imagem'])[1]")
-                )
+            # Verifica se a primeira imagem está presente
+            self.wait.until(
+                EC.presence_of_element_located((By.XPATH, Elements.FIRST_IMAGE))
             )
-            sleep(20)  # Aguarda o carregamento da imagem
-            firstImg.click()
+            # Verifica se a primeira imagem está visível
+            self.wait.until(
+                EC.element_to_be_clickable((By.XPATH, Elements.FIRST_IMAGE))
+            )
+            sleep(5)
+            # Clica na primeira imagem para abrir a visualização
+            self.browser.find_elements(By.XPATH, Elements.IMAGE_SELECTOR)[0].click()
             LOGGER.info("First image clicked, waiting for the image view to load...")
 
-            sleep(random.randint(5, 8))
+            # Adiciona espera explícita para garantir que a visualização carregou
+            self.wait.until(
+                EC.presence_of_element_located((By.XPATH, Elements.DOWNLOAD_BUTTON))
+            )
+            # btn de anterior
+            self.wait.until(
+                EC.presence_of_element_located((By.XPATH, Elements.NEXT_IMAGE_BUTTON))
+            )
+            sleep(2)  # Espera adicional para garantir
 
+            # Loop para baixar as imagens
             while True:
-                element_imagens = "(//div[contains(@aria-label, 'Lista de mídias')]/div[@role='listitem'])"
+                LOGGER.info(f"Processing image {n_images}...")
+
                 # Verifica se o elemento de imagens está presente
                 images = self.wait.until(
-                    EC.presence_of_all_elements_located((By.XPATH, element_imagens))
+                    EC.presence_of_all_elements_located((By.XPATH, Elements.IMAGE_LIST))
                 )
-                # Conta o número total de imagens
-                total_images = len(images)
-
-                # Se não houver imagens, sai do loop
-                if total_images == 0:
+                # Se não houver imagens, encerra o loop
+                if len(images) == 0:
+                    LOGGER.warning("No images found in the media list.")
                     break
-
-                # Clica na primeira imagem da lista de imagens
-                firstImgButton = self.wait.until(
-                    EC.presence_of_element_located((By.XPATH, f"{element_imagens}[1]"))
-                )
-                firstImgButton.click()
-                LOGGER.info(
-                    'First image in the list clicked, checking for "Anterior" button...'
-                )
                 btn_anterior = self.browser.find_element(
-                    By.XPATH, "//div[@aria-label='Anterior']"
+                    By.XPATH, Elements.NEXT_IMAGE_BUTTON
                 )
 
-                # Verifica se o botão está desativado ou ativado
+                # Verifica se o botão está desativado; caso esteja, encerra o loop porque a lista acabou
                 if btn_anterior.get_attribute("aria-disabled") == "true":
                     LOGGER.warning("O botão 'Anterior' está DESATIVADO.")
                     break
                 try:
-                    # Verifica se o texto "Hoje às" está presente na imagem principal
+                    # Aguarda o carregamento do texto "Hoje às" na imagem
                     self.wait_img.until(
+                        EC.presence_of_element_located((By.XPATH, Elements.HAS_TODAY))
+                    )
+                    LOGGER.info(f'Text "Hoje às" found in image {n_images}')
+                    # Clica no botão de download
+                    downloadButton = self.wait.until(
                         EC.presence_of_element_located(
-                            (By.XPATH, "//div[contains(text(), 'Hoje às')]")
+                            (By.XPATH, Elements.DOWNLOAD_BUTTON)
                         )
                     )
+                    downloadButton.click()
                     LOGGER.info(
-                        'Text "Hoje às" found in the main image, proceeding with download...',
-                        end="\r",
+                        f"Image {n_images} downloaded successfully.",
                     )
-
-                except:
-                    LOGGER.warning(
-                        'Text "Hoje às" not found in the main image, skipping download.',
-                        end="\r",
-                    )
-                    break
-
-            sleep(random.randint(5, 8))
-            # Seleciona todas as imagens na lista de mídias
-            images = self.wait.until(
-                EC.presence_of_all_elements_located((By.XPATH, element_imagens))
-            )
-            total_images = len(images)
-            # Limita o número de imagens a serem baixadas
-            if ultima_imagem != 1:
-                ultima_imagem = total_images - ultima_imagem
-
-            for i in range(total_images, ultima_imagem, -1):
-                try:
-                    # Clica na imagem atual
-                    imgButton = self.wait_img.until(
+                    # Passa para a próxima imagem
+                    nextButton = self.wait.until(
                         EC.presence_of_element_located(
-                            (By.XPATH, f"{element_imagens}[{i}]")
+                            (By.XPATH, Elements.NEXT_IMAGE_BUTTON)
                         )
                     )
-                    imgButton.click()
-                    LOGGER.info(f'Image {i} clicked, waiting for "Hoje às" text...')
-                    try:
-                        # Aguarda o carregamento do texto "Hoje às" na imagem
-                        self.wait_img.until(
-                            EC.presence_of_element_located(
-                                (By.XPATH, "//div[contains(text(), 'Hoje às')]")
-                            )
-                        )
-                        LOGGER.info(f'Text "Hoje às" found in image {i}')
-                        # Clica no botão de download
-                        downloadButton = self.wait.until(
-                            EC.presence_of_element_located(
-                                (By.XPATH, f"//button[@aria-label='Baixar']")
-                            )
-                        )
-                        downloadButton.click()
-                        LOGGER.info(
-                            f"Image {i} downloaded successfully.",
-                        )
-                        n_images += 1
-                        sleep(0.5)
-                    except TimeoutException:
-                        LOGGER.error(f'Text "Hoje às" not found in image {i}')
+                    nextButton.click()
+                    n_images += 1
+                    if limit_images != 0 and n_images >= limit_images:
+                        LOGGER.info(f"Limite de {limit_images} imagens alcançado.")
                         break
-
-                except Exception as e:
-                    LOGGER.error(f"Error in image: {i}:", e)
+                    sleep(0.5)
+                except TimeoutException:
+                    LOGGER.error(f'Text "Hoje às" not found in image {n_images}')
                     break
 
             LOGGER.info("All images have been processed.")
             # Saindo da visualização de imagens
-            self.browser.find_element(
-                By.XPATH, "//button[@aria-label='Fechar']"
-            ).click()
+            self.browser.find_element(By.XPATH, Elements.CLOSE_BUTTON).click()
             conversas = self.browser.find_element(
-                By.XPATH, "//button[@aria-label='Conversas']"
+                By.XPATH, Elements.CONVERSATIONS_BUTTON
             )
             # Voltando para a tela principal
             for _ in range(2):
                 conversas.send_keys(Keys.ESCAPE)
                 LOGGER.info("Returning to the main screen...")
                 sleep(0.5)
-        except Exception as e:
-            LOGGER.exception(f"An exception occurred: {e}")
+        except Exception as err:
+            LOGGER.error(f"An exception occurred: {str(err)}")
+            timestemp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.browser.save_screenshot(f"logs/error_{timestemp}.png")
         finally:
             return n_images
 
     def clear_search_box(self):
         """
-        Clear the search box.
-
-        The search box is used to search for contacts or messages.
+        Limpa o campo de busca usado para procurar contatos ou mensagens.
         """
         search_box_xpath = (
-            '(//div[@contenteditable="true" and @role="textbox"])[1]'  # UPDT 08-08
+            Elements.SEARCH_BOX_EDIT  # UPDT 08-08
         )
         search_box = self.wait.until(
             EC.presence_of_element_located((By.XPATH, search_box_xpath))
@@ -394,17 +368,17 @@ class WhatsApp:
 
     def find_by_username(self, username: str) -> bool:
         """
-        Locate a contact by username or number.
+        Localiza um contato pelo nome ou número.
 
         Args:
-            username (str): The username or number to search for.
+            username (str): Nome ou número que será pesquisado.
 
         Returns:
-            bool: True if the contact was found, False otherwise.
+            bool: True se o contato for encontrado, False caso contrário.
         """
         search_box = self.wait.until(
             EC.presence_of_element_located(
-                (By.XPATH, "(//*[@role='textbox'])[1]")
+                (By.XPATH, Elements.SEARCH_BOX)
             )  ## UPDT 08-08
         )
         self.clear_search_box()
@@ -412,26 +386,24 @@ class WhatsApp:
         search_box.send_keys(Keys.ENTER)
         try:
             opened_chat = self.wait.until(
-                EC.presence_of_element_located(
-                    (By.XPATH, "//div[@title='Dados do perfil']")
-                )
+                EC.presence_of_element_located((By.XPATH, Elements.DATA_PROFILE_BUTTON))
             )
             if opened_chat:
                 LOGGER.info(f'Successfully fetched chat "{username}"')
                 return True
         except NoSuchElementException:
-            LOGGER.exception(f'It was not possible to fetch chat "{username}"')
+            LOGGER.error(f'It was not possible to fetch chat "{username}"')
             return False
 
     def start_conversation(self, mobile: str):
         """
-        Tries to open a new conversation with the given number. Runs out after 30 seconds if not found.
+        Tenta abrir uma nova conversa com o número informado. Expira após 30 segundos.
 
         Args:
-            mobile (str): The number to search for.
+            mobile (str): Número que será pesquisado.
 
         Returns:
-            bool: True if the contact was found, False otherwise.
+            bool: True se o contato for encontrado, False caso contrário.
         """
 
         self.browser.get(
@@ -440,44 +412,38 @@ class WhatsApp:
 
         try:
             opened_chat = self.wait_contact.until(
-                EC.presence_of_element_located(
-                    (By.XPATH, "//div[@title='Dados do perfil']")
-                )
+                EC.presence_of_element_located((By.XPATH, Elements.DATA_PROFILE_BUTTON))
             )
             if opened_chat:
                 LOGGER.info(f'Successfully fetched chat "{mobile}"')
                 return True
         except NoSuchElementException:
-            LOGGER.exception(f'It was not possible to fetch chat "{mobile}"')
+            LOGGER.error(f'It was not possible to fetch chat "{mobile}"')
             return False
 
     def clear_messages(self, contact):
         """
-        Clear all messages in the chat with the given contact.
+        Limpa todas as mensagens do chat com o contato informado.
 
         Args:
-            contact (str): The contact to clear messages for.
+            contact (str): Contato que terá a conversa limpa.
         """
         self.find_by_username(contact)
         buttons = self.wait.until(
             EC.presence_of_all_elements_located(
-                (By.XPATH, "//button[@title='Mais opções']")
+                (By.XPATH, Elements.MORE_OPTIONS_BUTTON)
             )
         )
         if len(buttons) >= 2:
             buttons[1].click()
         self.wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, "//span[text()='Limpar conversa']")
-            )
+            EC.presence_of_element_located((By.XPATH, Elements.CLEAN_CHAT))
         ).click()
-        # timeout for loading the confirmation button
+        # Tempo para o carregamento do botão de confirmação
         sleep(random.randint(2, 5))
         self.wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, "//div[text()='Limpar conversa']")
-            )
+            EC.presence_of_element_located((By.XPATH, Elements.CONFIRM_CLEAN_CHAT))
         ).click()
-        # timeout for loading the confirmation deletion of messages
+        # Tempo adicional até concluir a exclusão das mensagens
         sleep(random.randint(5, 10))
         LOGGER.info(f"All messages from {contact} have been cleared.")
