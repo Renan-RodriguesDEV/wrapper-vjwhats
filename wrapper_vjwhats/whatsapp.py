@@ -161,7 +161,7 @@ class WhatsApp:
         )
         clipButton.click()
 
-    def send_file(self, attachment: str, which: int):
+    def send_file(self, attachment: str, which: int, caption: str = None):
         """
         Envia um arquivo pelo chat.
 
@@ -173,6 +173,10 @@ class WhatsApp:
         LOGGER.info(f"Sending file: {attachment}")
         try:
             filename = os.path.abspath(attachment)
+            if caption:
+                self.wait.until(
+                    EC.presence_of_element_located((By.XPATH, Elements.INPUT_MESSAGE))
+                ).send_keys(caption)
             self.find_attachment()
 
             if which == 1:
