@@ -34,6 +34,6 @@ class Elements:
     CONFIRM_CLEAN_CHAT = "//div[text()='Limpar conversa']"
     IMAGE_SELECTOR = '//div[contains(@aria-label,"Imagem")]'
     NR_NOT_FOUND = (
-        '//*[@id="app"]/div/span[2]/div/span/div/div/div/div/div/div[2]/div/div'
+        '//*[contains(text(),"Nenhuma conversa, contato ou mensagem encontrada")]'
     )
     IMAGE_BUTTON = '//*[contains(text(),"Fotos")]'

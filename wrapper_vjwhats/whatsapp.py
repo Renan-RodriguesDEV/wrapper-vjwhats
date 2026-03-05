@@ -7,9 +7,7 @@ Criado por: Renan Rodrigues (https://github.com/Renan-RodriguesDEV)
 """
 
 import datetime
-import logging
 import os
-import random
 from time import sleep
 
 import pyperclip
@@ -22,8 +20,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from .elements import Elements
+from .logger import setup_logger
 
-LOGGER = logging.getLogger("whatsapp")
+logger = setup_logger("whatsapp_logger")
 
 
 class WhatsApp:
@@ -48,37 +47,18 @@ class WhatsApp:
         """
         self.BASE_URL = "https://web.whatsapp.com/"
         self.browser = browser
+        self.responses = {
+            1: "Message sent successfully",
+            2: "Failed to send the message",
+            3: "An error occurred while trying to send the message",
+            4: "The number is not registered on WhatsApp",
+        }
         # self.browser.implicitly_wait(30)
         self.wait = WebDriverWait(self.browser, time_out)
         self.wait_img = WebDriverWait(self.browser, 10)
         self.wait_contact = WebDriverWait(self.browser, 30)
-        self.cli()
         self.login()
         self.mobile = ""
-
-    def cli(self):
-        """
-        Configura o logger para uso em linha de comando.
-        """
-        handler = logging.StreamHandler()
-        handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s - %(name)s -- [%(levelname)s] >> %(message)s"
-            )
-        )
-        LOGGER.addHandler(handler)
-        LOGGER.setLevel(logging.DEBUG)
-        if not os.path.exists("logs"):
-            os.makedirs("logs")
-        file_handler = logging.FileHandler(
-            f"logs/whatsapp_{os.getpid()}_{datetime.datetime.today().strftime('%d_%m_%Y')}.log"
-        )
-        file_handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s - %(name)s -- [%(levelname)s] >> %(message)s"
-            )
-        )
-        LOGGER.addHandler(file_handler)
 
     def login(self):
         """
@@ -87,7 +67,7 @@ class WhatsApp:
         self.browser.get(self.BASE_URL)
         self.browser.maximize_window()
 
-    def catch_alert(self, seconds=3):
+    def catch_alert(self, seconds: int = 3):
         """
         Trata diálogos de alerta.
 
@@ -102,7 +82,7 @@ class WhatsApp:
             self.browser.switch_to.alert.accept()
             return True
         except Exception as e:
-            LOGGER.error(f"An exception occurred: {e}")
+            logger.error(f"An exception occurred: {e}")
             return False
 
     def send_message(self, message: str) -> str:
@@ -116,39 +96,49 @@ class WhatsApp:
             str: Código de status indicando o resultado da operação.
         """
         try:
+            # Define os XPaths da caixa de texto e do botão de número não encontrado
             inp_xpath = Elements.INPUT_MESSAGE  # UPDT 08-08
             nr_not_found_xpath = (
                 Elements.NR_NOT_FOUND  # UPDT 08-08
             )
-            ctrl_element = self.wait.until(
+            # Aguarda até que apareça a caixa de texto OU o botão de erro
+            elements = self.wait.until(
                 lambda ctrl_self: ctrl_self.find_elements(By.XPATH, nr_not_found_xpath)
                 or ctrl_self.find_elements(By.XPATH, inp_xpath)
             )
-            for i in ctrl_element:
-                if i.aria_role == "textbox":
+            # Percorre os elementos encontrados para identificar qual apareceu
+            element = elements[0] if elements else None
+            if element:
+                # Se for a caixa de texto, envia a mensagem
+                if element.aria_role == "textbox":
+                    # Copia a mensagem para a área de transferência
                     pyperclip.copy(message)
+                    # Simula Ctrl+V para colar a mensagem (melhor compatibilidade com emojis)
                     ActionChains(self.browser).key_down(Keys.CONTROL).send_keys(
                         "v"
                     ).key_up(Keys.CONTROL).perform()
 
                     sleep(1)
-                    i.send_keys(Keys.ENTER)
-                    msg = "1"
+                    # Pressiona Enter para enviar a mensagem
+                    element.send_keys(Keys.ENTER)
+                    msg = 1  # Código de sucesso
                     sleep(2.5)
-                    try:
-                        self.catch_alert()
-                    except Exception:
-                        pass
-                elif i.aria_role == "button":
-                    if i.text == "OK":
-                        i.send_keys(Keys.ENTER)
-                        msg = "4"
+                    # Tenta capturar algum alerta que possa aparecer
+                    self.catch_alert()
+                # Se for um botão (erro de número não encontrado)
+                elif element.aria_role == "button":
+                    if element.text == "OK":
+                        # Fecha o alerta de erro
+                        element.send_keys(Keys.ENTER)
+                        msg = 4  # Código de número inválido
         except (NoSuchElementException, Exception) as bug:
-            LOGGER.error(f"An exception occurred: {bug}")
-            msg = "3"
+            # Registra qualquer erro que ocorrer
+            logger.error(f"An exception occurred: {bug}")
+            msg = 3  # Código de erro genérico
         finally:
-            LOGGER.info(f"{msg}")
-            return msg
+            # Sempre registra o código final e retorna
+            logger.info(f"{msg}")
+            return self.responses.get(msg, "Unknown status code")
 
     def find_attachment(self):
         """
@@ -170,35 +160,39 @@ class WhatsApp:
             which (int): Tipo do arquivo (1 documento, 2 imagem/vídeo).
         """
         response = 0
-        LOGGER.info(f"Sending file: {attachment}")
+        logger.info(f"Sending file: {attachment}")
         try:
             filename = os.path.abspath(attachment)
             if caption:
                 self.wait.until(
                     EC.presence_of_element_located((By.XPATH, Elements.INPUT_MESSAGE))
-                ).send_keys(caption)
+                ).click()
+                pyperclip.copy(caption)
+                ActionChains(self.browser).key_down(Keys.CONTROL).send_keys("v").key_up(
+                    Keys.CONTROL
+                ).perform()
             self.find_attachment()
 
             if which == 1:
-                LOGGER.info("Sending a document...")
+                logger.info("Sending a document...")
                 xpath = Elements.ALL_INPUT_FILE
                 try:
                     WebDriverWait(self.browser, 5000).until(
                         EC.element_to_be_clickable((By.XPATH, Elements.DOCUMENT_BUTTON))
                     ).click()
-                    LOGGER.info("Clicked on Documento button.")
+                    logger.info("Clicked on Documento button.")
                 except Exception as e:
-                    LOGGER.error(f"Error clicking on Documento: {e}")
+                    logger.error(f"Error clicking on Documento: {e}")
             elif which == 2:
-                LOGGER.info("Sending an image or video...")
+                logger.info("Sending an image or video...")
                 xpath = Elements.IMAGE_INPUT_FILE
                 try:
                     WebDriverWait(self.browser, 5000).until(
                         EC.element_to_be_clickable((By.XPATH, Elements.IMAGE_BUTTON))
                     ).click()
-                    LOGGER.info("Clicked on Documento button.")
+                    logger.info("Clicked on Image button.")
                 except Exception as e:
-                    LOGGER.error(f"Error clicking on Documento: {e}")
+                    logger.error(f"Error clicking on Image: {e}")
 
             sendButton = self.wait.until(
                 EC.presence_of_element_located((By.XPATH, xpath))
@@ -208,13 +202,13 @@ class WhatsApp:
             self.send_attachment()
             sleep(5)
             response = 1
-            LOGGER.info(f"Attachment has been successfully sent to {self.mobile}")
+            logger.info(f"Attachment has been successfully sent to {self.mobile}")
         except (NoSuchElementException, Exception) as bug:
-            response = -1
-            LOGGER.error(f"Failed to send a message to {self.mobile} - {bug}")
+            response = 2
+            logger.error(f"Failed to send a message to {self.mobile} - {bug}")
         finally:
-            LOGGER.info("send_file() finished running!")
-            return response
+            logger.info("send_file() finished running!")
+            return self.responses.get(response, "Unknown status code")
 
     def send_attachment(self):
         """
@@ -245,7 +239,7 @@ class WhatsApp:
                 EC.presence_of_element_located((By.XPATH, Elements.DATA_PROFILE_BUTTON))
             )
             dadosButton.click()
-            LOGGER.info(
+            logger.info(
                 'Data profile button clicked, waiting for "Mídia, links e docs" button...'
             )
             # Aguarda o carregamento do botão de mídia, links e documentos. E clica nele
@@ -253,7 +247,7 @@ class WhatsApp:
                 EC.presence_of_element_located((By.XPATH, Elements.MEDIA_DOCS))
             )
             dadosButton.click()
-            LOGGER.info(
+            logger.info(
                 '"Mídia, links e docs" button clicked, waiting for media list to load...'
             )
 
@@ -261,7 +255,7 @@ class WhatsApp:
             self.wait.until(
                 EC.presence_of_element_located((By.XPATH, Elements.THIS_MONTH))
             )
-            LOGGER.info("Media list loaded, waiting for the first image to appear...")
+            logger.info("Media list loaded, waiting for the first image to appear...")
 
             # Verifica se a primeira imagem está presente
             self.wait.until(
@@ -274,7 +268,7 @@ class WhatsApp:
             sleep(5)
             # Clica na primeira imagem para abrir a visualização
             self.browser.find_elements(By.XPATH, Elements.IMAGE_SELECTOR)[0].click()
-            LOGGER.info("First image clicked, waiting for the image view to load...")
+            logger.info("First image clicked, waiting for the image view to load...")
 
             # Adiciona espera explícita para garantir que a visualização carregou
             self.wait.until(
@@ -288,7 +282,7 @@ class WhatsApp:
 
             # Loop para baixar as imagens
             while True:
-                LOGGER.info(f"Processing image {n_images}...")
+                logger.info(f"Processing image {n_images}...")
 
                 # Verifica se o elemento de imagens está presente
                 images = self.wait.until(
@@ -296,7 +290,7 @@ class WhatsApp:
                 )
                 # Se não houver imagens, encerra o loop
                 if len(images) == 0:
-                    LOGGER.warning("No images found in the media list.")
+                    logger.warning("No images found in the media list.")
                     break
                 btn_anterior = self.browser.find_element(
                     By.XPATH, Elements.NEXT_IMAGE_BUTTON
@@ -304,14 +298,14 @@ class WhatsApp:
 
                 # Verifica se o botão está desativado; caso esteja, encerra o loop porque a lista acabou
                 if btn_anterior.get_attribute("aria-disabled") == "true":
-                    LOGGER.warning("O botão 'Anterior' está DESATIVADO.")
+                    logger.warning("O botão 'Anterior' está DESATIVADO.")
                     break
                 try:
                     # Aguarda o carregamento do texto "Hoje às" na imagem
                     self.wait_img.until(
                         EC.presence_of_element_located((By.XPATH, Elements.HAS_TODAY))
                     )
-                    LOGGER.info(f'Text "Hoje às" found in image {n_images}')
+                    logger.info(f'Text "Hoje às" found in image {n_images}')
                     # Clica no botão de download
                     downloadButton = self.wait.until(
                         EC.presence_of_element_located(
@@ -319,7 +313,7 @@ class WhatsApp:
                         )
                     )
                     downloadButton.click()
-                    LOGGER.info(
+                    logger.info(
                         f"Image {n_images} downloaded successfully.",
                     )
                     # Passa para a próxima imagem
@@ -331,14 +325,14 @@ class WhatsApp:
                     nextButton.click()
                     n_images += 1
                     if limit_images != 0 and n_images >= limit_images:
-                        LOGGER.info(f"Limite de {limit_images} imagens alcançado.")
+                        logger.info(f"Limite de {limit_images} imagens alcançado.")
                         break
                     sleep(0.5)
                 except TimeoutException:
-                    LOGGER.error(f'Text "Hoje às" not found in image {n_images}')
+                    logger.error(f'Text "Hoje às" not found in image {n_images}')
                     break
 
-            LOGGER.info("All images have been processed.")
+            logger.info("All images have been processed.")
             # Saindo da visualização de imagens
             self.browser.find_element(By.XPATH, Elements.CLOSE_BUTTON).click()
             conversas = self.browser.find_element(
@@ -347,10 +341,10 @@ class WhatsApp:
             # Voltando para a tela principal
             for _ in range(2):
                 conversas.send_keys(Keys.ESCAPE)
-                LOGGER.info("Returning to the main screen...")
+                logger.info("Returning to the main screen...")
                 sleep(0.5)
         except Exception as err:
-            LOGGER.error(f"An exception occurred: {str(err)}")
+            logger.error(f"An exception occurred: {str(err)}")
             timestemp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             self.browser.save_screenshot(f"logs/error_{timestemp}.png")
         finally:
@@ -393,10 +387,10 @@ class WhatsApp:
                 EC.presence_of_element_located((By.XPATH, Elements.DATA_PROFILE_BUTTON))
             )
             if opened_chat:
-                LOGGER.info(f'Successfully fetched chat "{username}"')
+                logger.info(f'Successfully fetched chat "{username}"')
                 return True
         except NoSuchElementException:
-            LOGGER.error(f'It was not possible to fetch chat "{username}"')
+            logger.error(f'It was not possible to fetch chat "{username}"')
             return False
 
     def start_conversation(self, mobile: str):
@@ -419,8 +413,8 @@ class WhatsApp:
                 EC.presence_of_element_located((By.XPATH, Elements.DATA_PROFILE_BUTTON))
             )
             if opened_chat:
-                LOGGER.info(f'Successfully fetched chat "{mobile}"')
+                logger.info(f'Successfully fetched chat "{mobile}"')
                 return True
         except NoSuchElementException:
-            LOGGER.error(f'It was not possible to fetch chat "{mobile}"')
+            logger.error(f'It was not possible to fetch chat "{mobile}"')
             return False
