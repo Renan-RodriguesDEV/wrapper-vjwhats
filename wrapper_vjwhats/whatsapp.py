@@ -420,30 +420,3 @@ class WhatsApp:
         except NoSuchElementException:
             LOGGER.error(f'It was not possible to fetch chat "{mobile}"')
             return False
-
-    def clear_messages(self, contact):
-        """
-        Limpa todas as mensagens do chat com o contato informado.
-
-        Args:
-            contact (str): Contato que terá a conversa limpa.
-        """
-        self.find_by_username(contact)
-        buttons = self.wait.until(
-            EC.presence_of_all_elements_located(
-                (By.XPATH, Elements.MORE_OPTIONS_BUTTON)
-            )
-        )
-        if len(buttons) >= 2:
-            buttons[1].click()
-        self.wait.until(
-            EC.presence_of_element_located((By.XPATH, Elements.CLEAN_CHAT))
-        ).click()
-        # Tempo para o carregamento do botão de confirmação
-        sleep(random.randint(2, 5))
-        self.wait.until(
-            EC.presence_of_element_located((By.XPATH, Elements.CONFIRM_CLEAN_CHAT))
-        ).click()
-        # Tempo adicional até concluir a exclusão das mensagens
-        sleep(random.randint(5, 10))
-        LOGGER.info(f"All messages from {contact} have been cleared.")
